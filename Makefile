@@ -33,6 +33,7 @@ croutoncursor_LIBS = -lX11 -lXfixes -lXrender
 croutonfbserver_LIBS = -lX11 -lXdamage -lXext -lXfixes -lXtst
 croutonwmtools_LIBS = -lX11
 croutonxi2event_LIBS = -lX11 -lXi
+croutonnewsession_LIBS = -lpam
 croutonfreon.so_LIBS = -ldl
 
 croutonwebsocket_DEPS = src/websocket.h

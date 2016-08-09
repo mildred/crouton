@@ -14,6 +14,7 @@ KEYFILE=''
 PRINT=''
 ROOT="`readlink -m '/var/run/crouton'`"
 MOUNTOPTS='rw,dev,exec,suid'
+SYSTEM=''
 
 USAGE="$APPLICATION [options] name [...]
 
@@ -27,13 +28,15 @@ Options:
                 If unspecified, the keys will be stored in the chroot if doing a
                 first encryption, or auto-detected on existing chroots.
     -n          Create the chroot if it doesn't exist.
-    -p          Prints out the path to the mounted directory on stdout."
+    -p          Prints out the path to the mounted directory on stdout.
+    -s          Mount a chroot suitable for a system in container (let the init
+                mount the system mount points, the chroot lives somewhere else)"
 
 # Common functions
 . "$BINDIR/../installer/functions"
 
 # Process arguments
-getopts_string='c:ek:np'
+getopts_string='c:ek:nps'
 while getopts_nextarg; do
     case "$getopts_var" in
     c) CHROOTS="`readlink -m -- "$getopts_arg"`";;
@@ -41,6 +44,7 @@ while getopts_nextarg; do
     k) KEYFILE="$getopts_arg";;
     n) CREATE='y';;
     p) PRINT='y';;
+    s) SYSTEM='y' ;;
     \?) error 2 "$USAGE";;
     esac
 done
@@ -113,6 +117,10 @@ for NAME in "$@"; do
 
     CHROOTSRC="$CHROOT"
     CHROOT="$ROOT/${CHROOT#/}"
+
+    if [ "$SYSTEM" = 'y' ]; then
+        CHROOT="$CHROOT.system"
+    fi
 
     # Ensure there's a root-only folder for the bind-mounted chroot
     mkdir -p -m 0700 "$CHROOT"

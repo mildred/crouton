@@ -160,11 +160,15 @@ addtrap "stty echo 2>/dev/null"
 
 # Mount the chroot and update our CHROOT path
 CHROOTSRC="$CHROOTS/$NAME"
+MOUNT_CHROOT_OPTS=
+if [ "$SYSTEMD" = y ]; then
+  MOUNT_CHROOT_OPTS="-s"
+fi
 if [ -n "$KEYFILE" ]; then
     CHROOT="`sh -e "$BINDIR/mount-chroot" \
-                                     -k "$KEYFILE" -p -c "$CHROOTS" -- "$NAME"`"
+                                     -k "$KEYFILE" -p -c "$CHROOTS" $MOUNT_CHROOT_OPTS -- "$NAME"`"
 else
-    CHROOT="`sh -e "$BINDIR/mount-chroot" -p -c "$CHROOTS" -- "$NAME"`"
+    CHROOT="`sh -e "$BINDIR/mount-chroot" -p -c "$CHROOTS" $MOUNT_CHROOT_OPTS -- "$NAME"`"
 fi
 
 if [ ! "$NOLOGIN" = 2 ]; then
@@ -690,14 +694,23 @@ elif [ -n "$SYSTEMD" ]; then
     [ -e "/run/crouton/$NAME.systemd.pid" ] && \
         read -r SYSTEMD_PID < "/run/crouton/$NAME.systemd.pid"
     if [ -z "SYSTEMD_PID" ] || ! pwdx $SYSTEMD_PID >/dev/null 2>&1; then
+        mkdir -p /run/netns
+        if [ -e "/run/netns/crouton-$NAME" ]; then
+          ip netns delete "crouton-$NAME"
+        fi
         echo "Starting systemd..."
-        env -i container=1 /sbin/minijail0 -v -C "$CHROOT" -f "/run/crouton/$NAME.systemd.pid" -i -I /bin/bash -c "exec /lib/systemd/systemd"
+        env -i container=1 /sbin/minijail0 -v -e -P "$CHROOT" -f "/run/crouton/$NAME.systemd.pid" -i -I /bin/bash -c "exec unshare -u /lib/systemd/systemd" # --log-level=debug --log-target=kmsg"
         sleep 1
         read -r SYSTEMD_PID < "/run/crouton/$NAME.systemd.pid"
+        ln -s "/proc/$SYSTEMD_PID/ns/net" "/run/netns/crouton-$NAME"
+    fi
+    SU=su
+    if [ -n "$CHROOT/usr/local/bin/croutonnewsession" ]; then
+      SU="/usr/local/bin/croutonnewsession -s seat0"
     fi
     if [ -n "$SYSTEMD_PID" ]; then
         echo "Entering systemd PID $SYSTEMD_PID..."
-        env -i TERM="$TERM" nsenter -m -t $SYSTEMD_PID -p -r -w -u -- su - "$USERNAME"
+        env -i TERM="$TERM" nsenter -m -t $SYSTEMD_PID -p -r -w -u -n -- $SU "$USERNAME"
     else
         echo "Could not start systemd" >&2
     fi
