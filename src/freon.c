@@ -14,12 +14,14 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/sysmacros.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <linux/input.h>
 #include <linux/vt.h>
+#include <linux/major.h>
 
 #define LOCK_FILE_DIR "/tmp/crouton-lock"
 #define DISPLAY_LOCK_FILE LOCK_FILE_DIR "/display"
@@ -39,12 +41,14 @@ static int (*orig_ioctl)(int d, int request, void* data);
 static int (*orig_open)(const char *pathname, int flags, mode_t mode);
 static int (*orig_open64)(const char *pathname, int flags, mode_t mode);
 static int (*orig_close)(int fd);
+static int (*orig_fxstat)(int ver, int fd, struct stat *buf);
 
 static void preload_init() {
     orig_ioctl = dlsym(RTLD_NEXT, "ioctl");
     orig_open = dlsym(RTLD_NEXT, "open");
     orig_open64 = dlsym(RTLD_NEXT, "open64");
     orig_close = dlsym(RTLD_NEXT, "close");
+    orig_fxstat = dlsym(RTLD_NEXT, "__fxstat");
 }
 
 /* Grabs the system-wide lockfile that arbitrates which chroot is using the GPU.
@@ -208,6 +212,19 @@ int close(int fd) {
         tty7fd = -1;
     }
     return orig_close(fd);
+}
+
+int __fxstat(int ver, int fd, struct stat *buf) {
+    if (!orig_fxstat) preload_init();
+
+    TRACE("fstat %d\n", fd);
+
+    if(fd == tty0fd) {
+        buf->st_rdev = makedev(TTY_MAJOR, 1);
+        return 0;
+    }
+
+    return orig_fxstat(ver, fd, buf);
 }
 
 uid_t getuid0(void) {

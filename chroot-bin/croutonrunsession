@@ -1,0 +1,17 @@
+#!/bin/bash
+
+active_session=$(busctl get-property \
+	org.freedesktop.login1 \
+	/org/freedesktop/login1/seat/$XDG_SEAT \
+	org.freedesktop.login1.Seat ActiveSession \
+	| cut -d'"' -f2)
+
+reactivate(){
+	echo "Reactivate session $active_session"
+	loginctl activate $active_session
+}
+
+trap reactivate 0
+
+"$@"
+
